@@ -8,7 +8,7 @@ import java.util.Scanner;
 
 public class MultiClient {
     private static final String SERVER_ADDRESS = "localhost";
-    private static final int BASE_PORT = 60500;
+    private static final int BASE_PORT = 60000;
     // Number of clients for the connection
     private static final int NUM_CLIENTS = 10;
 
