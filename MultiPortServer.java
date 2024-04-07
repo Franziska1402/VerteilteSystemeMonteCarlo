@@ -15,6 +15,7 @@ public class MultiPortServer {
     // Range for possible ports
     private static final int START_PORT = 60000;
     private static final int END_PORT = 60500;
+
     // Send to connected clients
     private static final List<PrintWriter> clientOutputStreams = new ArrayList<>();
     // Results from clients for average
@@ -49,10 +50,12 @@ public class MultiPortServer {
                     // Writer to send task to the clients
                     PrintWriter writer = new PrintWriter(clientSocket.getOutputStream());
                     if (port != MASTER_PORT) {
+                        // Add client's writer to the list
                         synchronized (clientOutputStreams) {
                             clientOutputStreams.add(writer);
                         }
                     } else {
+                        // Set master control writer
                         masterControlWriter = writer;
                     }
 
@@ -83,50 +86,60 @@ public class MultiPortServer {
                     String message = input.nextLine();
                     if (port == MASTER_PORT) {
                         // Task from master control -> here only calculation of pi
-                        System.out.println("==============================================");
-                        System.out.println("Master Control Program sent task: " + message);
-                        if (message.strip().equalsIgnoreCase("quit")) {
-                            disconnectClients();
-                            if (clientOutputStreams.size() == 0) {
-                                System.exit(0);
-                            }
-                        } else if (message.strip().equalsIgnoreCase("pi")) {
-                            // Send task to all connected clients
-                            broadcastFromMasterControl(message);
-                        }
+                        handleMasterControlTask(message);
                     } else {
                         // Processing result from client
-                        System.out.println("Received double from client on port " + port + ": " + message);
-                        if (!message.equals("quit")) {
-                            double result;
-                            try {
-                                result = Double.parseDouble(message);
-                                synchronized (clientResults) {
-                                    clientResults.add(result);
-                                }
-                            } catch (NumberFormatException e) {
-                                // Ignore if no double was sent
-                                continue;
-                            }
-                        } else {
-                            break; // Client sent "quit", terminate this handler
-                        }
-                    }
-
-                    if (port != MASTER_PORT && clientResults.size() == clientOutputStreams.size()) {
-                        double result = calculateAverageResult();
-                        sendResultToMasterControl(result);
-                        synchronized (clientResults) {
-                            clientResults.clear();
-                        }
+                        processClientResult(message);
                     }
                 }
             } finally {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+                // Close socket
+                closeSocket();
+            }
+        }
+
+        private void handleMasterControlTask(String message) {
+            System.out.println("==============================================");
+            System.out.println("Master Control Program sent task: " + message);
+            if (message.strip().equalsIgnoreCase("quit")) {
+                disconnectClients();
+                if (clientOutputStreams.isEmpty()) {
+                    System.exit(0);
                 }
+            } else if (message.strip().equalsIgnoreCase("pi")) {
+                // Send task to all connected clients
+                broadcastFromMasterControl(message);
+            }
+        }
+
+        private void processClientResult(String message) {
+            System.out.println("Received double from client on port " + port + ": " + message);
+            if (!message.equals("quit")) {
+                try {
+                    double result = Double.parseDouble(message);
+                    synchronized (clientResults) {
+                        clientResults.add(result);
+                    }
+                } catch (NumberFormatException e) {
+                    // Ignore if no double was sent
+                }
+            }
+
+            if (port != MASTER_PORT && clientResults.size() == clientOutputStreams.size()) {
+                // If all results are received, calculate average and send to master
+                double result = calculateAverageResult();
+                sendResultToMasterControl(result);
+                synchronized (clientResults) {
+                    clientResults.clear();
+                }
+            }
+        }
+
+        private void closeSocket() {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
@@ -173,6 +186,5 @@ public class MultiPortServer {
         }
         clientOutputStreams.clear();
         clientResults.clear();
-        System.out.println("All clients disconnected");
     }
 }
